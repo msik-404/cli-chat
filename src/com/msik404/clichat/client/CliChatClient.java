@@ -25,8 +25,8 @@ public class CliChatClient {
     public void run() throws RuntimeException {
 
         try {
-            var output = new ObjectOutputStream(new BufferedOutputStream(server.getOutputStream()));
-            var input = new ObjectInputStream(new BufferedInputStream(server.getInputStream()));
+            var output = new ObjectOutputStream(server.getOutputStream());
+            var input = new ObjectInputStream(server.getInputStream());
 
             pool.submit(() -> {
                 while (true) {

@@ -43,7 +43,7 @@ public class CliChatServer {
                 var socket = server.accept();
                 LOGGER.log(Level.INFO, "SERVER GOT CONNECTION FROM: " + socket.getRemoteSocketAddress());
 
-                var output = new ObjectOutputStream(new BufferedOutputStream(socket.getOutputStream()));
+                var output = new ObjectOutputStream(socket.getOutputStream());
                 outputs.put(socket.getRemoteSocketAddress(), new SocketWithOutput(socket, output));
 
                 pool.submit(new ClientHandler(socket, outputs));

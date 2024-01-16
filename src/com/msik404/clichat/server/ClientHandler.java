@@ -26,7 +26,7 @@ public class ClientHandler implements Runnable {
     public void run() {
 
         try {
-            var input = new ObjectInputStream(new BufferedInputStream(socket.getInputStream()));
+            var input = new ObjectInputStream(socket.getInputStream());
 
             String message;
             do {
