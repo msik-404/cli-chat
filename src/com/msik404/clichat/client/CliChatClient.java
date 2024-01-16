@@ -26,7 +26,7 @@ public class CliChatClient {
 
         try {
             var output = new ObjectOutputStream(server.getOutputStream());
-            var input = new ObjectInputStream(server.getInputStream());
+            var input = new ObjectInputStream(new BufferedInputStream(server.getInputStream()));
 
             pool.submit(() -> {
                 while (true) {
@@ -38,19 +38,19 @@ public class CliChatClient {
             var scanner = new Scanner(System.in);
 
             while (true) {
-                var message = scanner.next();
+                var message = scanner.nextLine();
                 if (message.equals("STOP")) {
                     output.writeObject(null);
                     break;
                 }
                 output.writeObject(message);
-                output.flush();
             }
 
         } catch (IOException ex) {
             throw new RuntimeException(ex.getMessage());
         } finally {
             try {
+                pool.shutdown();
                 server.close();
             } catch (IOException ex) {
                 throw new RuntimeException(ex.getMessage());
