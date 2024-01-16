@@ -22,6 +22,18 @@ public class ClientHandler implements Runnable {
         this.outputs = outputs;
     }
 
+    private String formatMessage(SocketAddress clientName, String message) {
+        var builder = new StringBuilder();
+        builder.append(clientName.toString());
+        if (message == null) {
+            builder.append(" has left.");
+            return builder.toString();
+        }
+        builder.append(" has said: ");
+        builder.append(message);
+        return builder.toString();
+    }
+
     @Override
     public void run() {
 
@@ -36,7 +48,7 @@ public class ClientHandler implements Runnable {
                     if (!socket.equals(otherSocket)) {
                         var output = socketWithOutput.output();
                         try {
-                            output.writeObject(socket.getRemoteSocketAddress() + " said: " + message);
+                            output.writeObject(formatMessage(socket.getRemoteSocketAddress(), message));
                         } catch (IOException ex)  {
                             outputs.remove(otherSocket.getRemoteSocketAddress());
                             LOGGER.log(Level.WARNING, "Write to client has failed. Probably client's socket has been closed.");
