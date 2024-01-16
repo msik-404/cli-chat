@@ -45,14 +45,23 @@ public class ClientHandler implements Runnable {
                 }
             } while (message != null); // When client wishes to exit, he will send null object.
 
-            // When client wishes to exit or some error happened, remove client from message receivers.
-            socket.close();
-            outputs.remove(socket.getRemoteSocketAddress());
         } catch (IOException ex) {
-            outputs.remove(socket.getRemoteSocketAddress());
             LOGGER.log(Level.WARNING, "Read from client has failed. Probably client has left unexpectedly.");
         } catch (ClassNotFoundException ex) {
+            LOGGER.log(Level.WARNING, "Wrong class has ben send.");
             throw new RuntimeException(ex.getMessage());
+        } finally {
+            try {
+                // When client wishes to exit or some error happened, remove client from message receivers.
+                outputs.remove(socket.getRemoteSocketAddress());
+                if (!socket.isClosed()) {
+                    socket.close();
+                }
+                LOGGER.log(Level.INFO, "User: " + socket.getRemoteSocketAddress() + " has disconnected.");
+            } catch (IOException ex) {
+                LOGGER.log(Level.SEVERE, "Socket could not be closed for some reason.");
+                throw new RuntimeException(ex.getMessage());
+            }
         }
     }
 }
