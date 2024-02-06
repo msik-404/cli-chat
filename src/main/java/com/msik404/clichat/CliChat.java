@@ -5,6 +5,8 @@ import com.msik404.clichat.server.CliChatServer;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -18,7 +20,8 @@ public class CliChat {
             String host = args[1];
             InetAddress address = InetAddress.getByName(host);
             int port = Integer.parseInt(args[2]);
-            try (var client = new CliChatClient(address, port)) {
+            var client = new CliChatClient(new InetSocketAddress(address, port));
+            try {
                 client.run();
             } catch (IOException ex) {
                 LOGGER.log(Level.SEVERE, "Client closed due to error: " + ex.getMessage());

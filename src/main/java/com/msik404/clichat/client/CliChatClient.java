@@ -1,50 +1,81 @@
 package com.msik404.clichat.client;
 
-import java.io.BufferedInputStream;
+import com.msik404.clichat.message.MessageBuffer;
+
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.net.InetAddress;
-import java.net.Socket;
+import java.net.InetSocketAddress;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.util.Scanner;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class CliChatClient implements AutoCloseable {
+public class CliChatClient {
 
     private static final Logger LOGGER = Logger.getLogger(CliChatClient.class.getName());
 
-    private final Socket server;
+    private final InetSocketAddress serverAddress;
 
-    public CliChatClient(InetAddress address, int port) throws IOException {
+    public CliChatClient(InetSocketAddress socketAddress) {
 
-        this.server = new Socket(address, port);
+        this.serverAddress = socketAddress;
     }
 
     public void run() throws IOException {
 
-        var output = new ObjectOutputStream(server.getOutputStream());
-        var input = new ObjectInputStream(new BufferedInputStream(server.getInputStream()));
-
-        Thread listener = new Thread(new ClientInputHandler(input));
-        listener.start();
-
-        var scanner = new Scanner(System.in);
-        while (true) {
-            var message = scanner.nextLine();
-            if (message.equals("STOP")) {
-                output.writeObject(null);
-                listener.interrupt(); // Stop listening.
-                LOGGER.log(Level.INFO, "Client disconnects.");
-                break;
+        try (var serverChannel = SocketChannel.open()) {
+            serverChannel.configureBlocking(false);
+            LOGGER.log(Level.INFO, "Trying to connect to the server: %s", serverAddress);
+            boolean isConnected = serverChannel.connect(serverAddress);
+            if (isConnected) {
+                LOGGER.log(Level.INFO, "Connection to server: %s was successful.", serverAddress);
             }
-            output.writeObject(message);
-        }
-    }
 
-    @Override
-    public void close() throws IOException {
-        server.close();
+            var selector = Selector.open();
+            serverChannel.register(selector, SelectionKey.OP_CONNECT);
+            serverChannel.register(selector, SelectionKey.OP_WRITE);
+
+            Thread listener = new Thread(new ClientInputHandler(serverChannel));
+            listener.start();
+
+            var buffer = new MessageBuffer();
+            var scanner = new Scanner(System.in);
+            boolean userWantsToInput = true;
+            int toWriteAmount = -1;
+            while (userWantsToInput && toWriteAmount != 0) {
+                selector.select();
+                for (SelectionKey key : selector.selectedKeys()) {
+                    if (key.isConnectable()) {
+                        serverChannel.finishConnect();
+                        LOGGER.log(Level.INFO, "Connection to server: %s was successful.", serverAddress);
+                        key.cancel();
+                    }
+                    if (key.isWritable()) {
+                        if (userWantsToInput) {
+                            var message = scanner.nextLine();
+                            buffer.write(message);
+                            buffer.flip();
+                            if (message.equals("STOP")) {
+                                listener.interrupt();
+                                LOGGER.log(Level.INFO, "Client disconnects. But there still might be data to send. " +
+                                        "Don't close the program."
+                                );
+                                userWantsToInput = false;
+                            }
+                        }
+                        toWriteAmount = buffer.writeToChannel(serverChannel);
+                        if (userWantsToInput) {
+                            if (toWriteAmount != 0) {
+                                buffer.compact();
+                            } else {
+                                buffer.clear();
+                            }
+                        }
+                    }
+                }
+            }
+            LOGGER.log(Level.INFO, "All data sent. You can close the program now.");
+        }
     }
 }
