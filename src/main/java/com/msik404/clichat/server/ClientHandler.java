@@ -14,44 +14,39 @@ public class ClientHandler implements Runnable {
     private static final Logger LOGGER = Logger.getLogger(ClientHandler.class.getName());
 
     private final Socket socket;
-    private final ConcurrentMap<SocketAddress, SocketWithOutput> outputs;
+    private final ConcurrentMap<SocketAddress, ClientOutputHandler> outputs;
 
-    public ClientHandler(Socket socket, ConcurrentMap<SocketAddress, SocketWithOutput> outputs) {
+    public ClientHandler(Socket socket, ConcurrentMap<SocketAddress, ClientOutputHandler> outputs) {
 
         this.socket = socket;
         this.outputs = outputs;
     }
 
-    private String formatMessage(SocketAddress clientName, String message) {
-        var builder = new StringBuilder();
-        builder.append(clientName.toString());
-        if (message == null) {
-            builder.append(" has left.");
-            return builder.toString();
-        }
-        builder.append(" has said: ");
-        builder.append(message);
-        return builder.toString();
-    }
-
     @Override
     public void run() {
-
-        try {
-            var input = new ObjectInputStream(new BufferedInputStream(socket.getInputStream()));
-
+        try (var input = new ObjectInputStream(new BufferedInputStream(socket.getInputStream()))) {
             String message;
             do {
                 message = (String) input.readObject();
-                for (SocketWithOutput socketWithOutput : outputs.values()) {
-                    var otherSocket = socketWithOutput.socket();
+                for (ClientOutputHandler clientOutputHandler : outputs.values()) {
+                    var otherSocket = clientOutputHandler.socket();
                     if (!socket.equals(otherSocket)) {
-                        var output = socketWithOutput.output();
                         try {
-                            output.writeObject(formatMessage(socket.getRemoteSocketAddress(), message));
-                        } catch (IOException ex)  {
+                            clientOutputHandler.sendMessage(socket.getRemoteSocketAddress(), message);
+                        } catch (IOException ex) {
                             outputs.remove(otherSocket.getRemoteSocketAddress());
-                            LOGGER.log(Level.WARNING, "Write to client has failed. Probably client's socket has been closed.");
+                            LOGGER.log(
+                                    Level.WARNING,
+                                    "Write to client has failed. Probably client's socket has been closed."
+                            );
+                        } catch (InterruptedException ex) {
+                            LOGGER.log(
+                                    Level.SEVERE,
+                                    "Current task has been interrupted from outside while waiting for mutex to " +
+                                            "send message to client."
+                            );
+                            message = null; // signal to get to final block.
+                            break;
                         }
                     }
                 }
@@ -60,19 +55,18 @@ public class ClientHandler implements Runnable {
         } catch (IOException ex) {
             LOGGER.log(Level.WARNING, "Read from client has failed. Probably client has left unexpectedly.");
         } catch (ClassNotFoundException ex) {
-            LOGGER.log(Level.WARNING, "Wrong class has ben send.");
-            throw new RuntimeException(ex.getMessage());
+            LOGGER.log(Level.WARNING, "Unexpected class has ben received.");
         } finally {
             try {
                 // When client wishes to exit or some error happened, remove client from message receivers.
+                // Only leaving clients close sockets.
                 outputs.remove(socket.getRemoteSocketAddress());
                 if (!socket.isClosed()) {
                     socket.close();
                 }
                 LOGGER.log(Level.INFO, "User: " + socket.getRemoteSocketAddress() + " has disconnected.");
             } catch (IOException ex) {
-                LOGGER.log(Level.SEVERE, "Socket could not be closed for some reason.");
-                throw new RuntimeException(ex.getMessage());
+                LOGGER.log(Level.SEVERE, "Socket threw exception during attempt of closing it.");
             }
         }
     }

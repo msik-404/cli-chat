@@ -1,7 +1,6 @@
 package com.msik404.clichat.server;
 
 import java.io.IOException;
-import java.io.ObjectOutputStream;
 import java.net.ServerSocket;
 import java.net.SocketAddress;
 import java.util.concurrent.ConcurrentHashMap;
@@ -11,44 +10,43 @@ import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-public class CliChatServer {
+public class CliChatServer implements AutoCloseable {
 
     private static final Logger LOGGER = Logger.getLogger(CliChatServer.class.getName());
 
     private final ExecutorService pool;
     private final ServerSocket server;
 
-    private final ConcurrentMap<SocketAddress, SocketWithOutput> outputs;
+    private final ConcurrentMap<SocketAddress, ClientOutputHandler> outputs;
 
-    // todo: create better exceptions.
-    public CliChatServer(int port) throws RuntimeException {
+    public CliChatServer(int port) throws IOException {
 
-        try {
-            this.server = new ServerSocket(port);
-            LOGGER.log(Level.INFO, "SERVER LISTENING AT: " + server.getLocalSocketAddress());
+        this.server = new ServerSocket(port);
+        LOGGER.log(Level.INFO, "SERVER LISTENING AT: " + server.getLocalSocketAddress());
 
-            this.pool = Executors.newCachedThreadPool();
-            this.outputs = new ConcurrentHashMap<>();
-        } catch (IOException ex) {
-            throw new RuntimeException(ex.getMessage());
+        this.pool = Executors.newCachedThreadPool();
+        this.outputs = new ConcurrentHashMap<>();
+    }
+
+    public void run() throws IOException {
+
+        while (true) {
+            var socket = server.accept();
+            LOGGER.log(Level.INFO, "SERVER GOT CONNECTION FROM: " + socket.getRemoteSocketAddress());
+
+            outputs.put(socket.getRemoteSocketAddress(), new ClientOutputHandler(socket));
+
+            pool.submit(new ClientHandler(socket, outputs));
         }
     }
 
-    // todo: create better exceptions.
-    public void run() throws RuntimeException {
-
-        try {
-            while (true) {
-                var socket = server.accept();
-                LOGGER.log(Level.INFO, "SERVER GOT CONNECTION FROM: " + socket.getRemoteSocketAddress());
-
-                var output = new ObjectOutputStream(socket.getOutputStream());
-                outputs.put(socket.getRemoteSocketAddress(), new SocketWithOutput(socket, output));
-
-                pool.submit(new ClientHandler(socket, outputs));
+    @Override
+    public void close() throws IOException {
+        server.close();
+        for (ClientOutputHandler s : outputs.values()) {
+            if (!s.socket().isClosed()) {
+                s.socket().close();
             }
-        } catch (IOException ex) {
-            throw new RuntimeException(ex.getMessage());
         }
     }
 }
