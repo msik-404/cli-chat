@@ -37,7 +37,8 @@ public record ClientInputHandler(SocketChannel serverChannel) implements Runnabl
                     if (optional.isPresent()) {
                         header = optional.get();
                     }
-                } else {
+                }
+                if (header != null) {
                     Optional<String> optional = buffer.readMessage(header);
                     if (optional.isPresent()) {
                         header = null;
