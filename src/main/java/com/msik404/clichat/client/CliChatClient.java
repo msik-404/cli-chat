@@ -46,24 +46,24 @@ public class CliChatClient {
             while (userWantsToInput && toWriteAmount != 0) {
                 selector.select();
                 for (SelectionKey key : selector.selectedKeys()) {
+                    if (userWantsToInput) {
+                        var message = scanner.nextLine();
+                        buffer.write(message);
+                        buffer.flip();
+                        if (message.equals("STOP")) {
+                            listener.interrupt();
+                            LOGGER.log(Level.INFO, "Client disconnects. But there still might be data to send. " +
+                                    "Don't close the program."
+                            );
+                            userWantsToInput = false;
+                        }
+                    }
                     if (key.isConnectable()) {
                         serverChannel.finishConnect();
                         LOGGER.log(Level.INFO, "Connection to server: %s was successful.", serverAddress);
                         key.cancel();
                     }
                     if (key.isWritable()) {
-                        if (userWantsToInput) {
-                            var message = scanner.nextLine();
-                            buffer.write(message);
-                            buffer.flip();
-                            if (message.equals("STOP")) {
-                                listener.interrupt();
-                                LOGGER.log(Level.INFO, "Client disconnects. But there still might be data to send. " +
-                                        "Don't close the program."
-                                );
-                                userWantsToInput = false;
-                            }
-                        }
                         toWriteAmount = buffer.writeToChannel(serverChannel);
                         if (userWantsToInput) {
                             if (toWriteAmount != 0) {
