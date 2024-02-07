@@ -29,7 +29,7 @@ public class ClientHandler implements Runnable {
 
         var buffer = ByteBuffer.allocate(Header.size() + MessageBufferHandler.MAX_BUFFER_SIZE);
         int bufferedAmount = 0;
-        boolean flipped = false;
+        boolean writeMode = true;
 
         var header = new Header();
 
@@ -38,26 +38,24 @@ public class ClientHandler implements Runnable {
 
         try {
             do {
-                bufferedAmount += socketChannel.read(buffer);
-
-                if (bufferedAmount >= Header.size()) {
-                    buffer.flip();
-                    flipped = true;
-                    bufferedAmount -= header.updateFromBuffer(buffer);
+                int count = socketChannel.read(buffer);
+                if (count == -1) {
+                    LOGGER.log(Level.WARNING, "Connection with the server has been lost.");
+                    return;
                 }
-                if (header.isJustUpdated() && bufferedAmount >= header.getMessageLength()) {
-                    if (!flipped) {
+                bufferedAmount += count;
+                if (header.isEmpty() && bufferedAmount >= Header.size()) {
+                    buffer.flip();
+                    writeMode = false;
+                    bufferedAmount -= header.getFrom(buffer);
+                }
+                if (!header.isEmpty() && bufferedAmount >= header.getMessageLength()) {
+                    if (writeMode) {
                         buffer.flip();
                     }
-                    flipped = false;
                     String message = MessageBufferHandler.getMessage(buffer, header);
                     bufferedAmount -= header.getMessageLength();
-                    header.reset();
-                    if (bufferedAmount == 0) {
-                        buffer.clear();
-                    } else {
-                        buffer.compact();
-                    }
+                    header.clear();
 
                     if (message.equals("STOP")) {
                         userWantsToInput = false;
@@ -71,16 +69,24 @@ public class ClientHandler implements Runnable {
                             } catch (IOException ex) {
                                 outputs.remove(otherChannel.getRemoteAddress());
                                 LOGGER.log(Level.WARNING, "Write to client has failed. Probably client's socket has been closed.");
-                            }
-                            catch (InterruptedException e) {
+                            } catch (InterruptedException e) {
                                 LOGGER.log(Level.SEVERE, "Current task has been interrupted from outside while waiting for mutex to send message to client.");
                                 stopSending = true;
                                 break;
                             }
                         }
                     }
+                    if (stopSending) {
+                        break;
+                    }
                 }
-            } while (userWantsToInput && !stopSending);
+                if (bufferedAmount == 0) {
+                    buffer.clear();
+                } else {
+                    buffer.compact();
+                }
+                writeMode = true;
+            } while (userWantsToInput);
 
         } catch (IOException ex) {
             LOGGER.log(Level.WARNING, "Read from client has failed. Probably client has left unexpectedly.");
@@ -89,10 +95,8 @@ public class ClientHandler implements Runnable {
                 // When client wishes to exit or some error happened, remove client from message receivers.
                 // Only leaving clients close sockets.
                 outputs.remove(socketChannel.getRemoteAddress());
-                if (socketChannel.isOpen()) {
-                    socketChannel.close();
-                }
                 LOGGER.log(Level.INFO, "User: " + socketChannel.getRemoteAddress() + " has disconnected.");
+                socketChannel.close();
             } catch (IOException ex) {
                 LOGGER.log(Level.SEVERE, "Socket threw exception during attempt of closing it.");
             }

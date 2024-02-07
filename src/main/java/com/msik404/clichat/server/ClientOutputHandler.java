@@ -8,8 +8,12 @@ import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.Semaphore;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public record ClientOutputHandler(SocketChannel socketChannel, ByteBuffer buffer, Semaphore mutex) {
+
+    private static final Logger LOGGER = Logger.getLogger(ClientOutputHandler.class.getName());
 
     public ClientOutputHandler(SocketChannel socketChannel) {
         this(socketChannel, ByteBuffer.allocate(Header.size() + MessageBufferHandler.MAX_BUFFER_SIZE), new Semaphore(1));
@@ -18,7 +22,7 @@ public record ClientOutputHandler(SocketChannel socketChannel, ByteBuffer buffer
     private static String formatMessage(SocketAddress clientName, String message) {
         var builder = new StringBuilder();
         builder.append(clientName.toString());
-        if (message == null) {
+        if (message.equals("STOP")) {
             builder.append(" has left.");
             return builder.toString();
         }
@@ -30,13 +34,16 @@ public record ClientOutputHandler(SocketChannel socketChannel, ByteBuffer buffer
     public void sendMessage(SocketAddress clientName, Header header, String message) throws IOException, InterruptedException {
         String formattedMessage = formatMessage(clientName, message);
         mutex.acquire();
-        int bufferedAmount = MessageBufferHandler.putMessage(buffer, header, formattedMessage);
+        MessageBufferHandler.putMessage(buffer, header, formattedMessage);
         buffer.flip();
-        while (bufferedAmount != 0) {
-            bufferedAmount -= socketChannel.write(buffer);
+        while (buffer.hasRemaining()) {
+            if (socketChannel.write(buffer) == -1) {
+                LOGGER.log(Level.WARNING, "Connection lost with client: " + clientName);
+                break;
+            }
         }
         buffer.clear();
         mutex.release();
-        header.reset();
+        header.clear();
     }
 }

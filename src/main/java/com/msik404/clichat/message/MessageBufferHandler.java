@@ -7,18 +7,20 @@ public class MessageBufferHandler {
 
     public static int MAX_BUFFER_SIZE = Header.size() + 1024;
 
-    public static int putMessage(ByteBuffer buffer, Header header, String message) {
+    public static void putMessage(ByteBuffer buffer, Header header, String message) {
+
+        assert (header.isEmpty());
 
         byte[] data = message.getBytes(StandardCharsets.UTF_8);
-        header.updateFromMessage(data);
+        header.getFrom(data);
 
         header.putInto(buffer);
         buffer.put(data);
-
-        return Header.size() + data.length;
     }
 
     public static String getMessage(ByteBuffer buffer, Header header) {
+
+        assert (!header.isEmpty());
 
         int size = header.getMessageLength();
         var builder = new StringBuilder(size);

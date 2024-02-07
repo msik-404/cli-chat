@@ -6,7 +6,6 @@ import com.msik404.clichat.server.CliChatServer;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.SocketAddress;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 

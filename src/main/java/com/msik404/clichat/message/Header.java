@@ -5,26 +5,29 @@ import java.nio.ByteBuffer;
 public class Header {
 
     private int messageLength;
-    private boolean justUpdated;
+    private boolean isEmpty;
 
     public Header() {
         this.messageLength = 0;
-        this.justUpdated = false;
+        this.isEmpty = true;
     }
 
     public static int size() {
         return Integer.BYTES;
     }
 
-    public int updateFromBuffer(ByteBuffer buffer) {
+    public int getFrom(ByteBuffer buffer) {
+
+        isEmpty = false;
+
         messageLength = buffer.getInt();
-        justUpdated = true;
         return size();
     }
 
-    public void updateFromMessage(byte[] message) {
+    public void getFrom(byte[] message) {
+
         messageLength = message.length;
-        justUpdated = true;
+        isEmpty = false;
     }
 
     public void putInto(ByteBuffer buffer) {
@@ -35,12 +38,11 @@ public class Header {
         return messageLength;
     }
 
-    public boolean isJustUpdated() {
-        return justUpdated;
+    public boolean isEmpty() {
+        return isEmpty;
     }
 
-    public void reset() {
-        messageLength = 0;
-        justUpdated = false;
+    public void clear() {
+        isEmpty = true;
     }
 }

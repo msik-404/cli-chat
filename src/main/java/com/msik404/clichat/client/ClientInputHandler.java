@@ -6,7 +6,6 @@ import com.msik404.clichat.message.MessageBufferHandler;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
-import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -19,36 +18,41 @@ public record ClientInputHandler(SocketChannel serverChannel) implements Runnabl
 
         var buffer = ByteBuffer.allocate(Header.size() + MessageBufferHandler.MAX_BUFFER_SIZE);
         int bufferedAmount = 0;
-        boolean flipped = false;
+        boolean writeMode = true;
 
         var header = new Header();
 
         try {
             while (true) {
-                bufferedAmount += serverChannel.read(buffer);
+                int count = serverChannel.read(buffer);
+                if (count == -1) {
+                    LOGGER.log(Level.WARNING, "Connection with the server has been lost.");
+                    return;
+                }
                 if (Thread.interrupted()) {
                     LOGGER.log(Level.INFO, "Stopping listening due to client disconnecting.");
                     return;
                 }
-                if (bufferedAmount >= Header.size()) {
+                bufferedAmount += count;
+                if (header.isEmpty() && bufferedAmount >= Header.size()) {
                     buffer.flip();
-                    flipped = true;
-                    bufferedAmount -= header.updateFromBuffer(buffer);
+                    writeMode = false;
+                    bufferedAmount -= header.getFrom(buffer);
                 }
-                if (header.isJustUpdated() && bufferedAmount >= header.getMessageLength()) {
-                    if (!flipped) {
+                if (!header.isEmpty() && bufferedAmount >= header.getMessageLength()) {
+                    if (writeMode) {
                         buffer.flip();
                     }
-                    flipped = false;
                     System.out.println(MessageBufferHandler.getMessage(buffer, header));
                     bufferedAmount -= header.getMessageLength();
-                    header.reset();
-                    if (bufferedAmount == 0) {
-                        buffer.clear();
-                    } else {
-                        buffer.compact();
-                    }
+                    header.clear();
                 }
+                if (buffer.hasRemaining()) {
+                    buffer.compact();
+                } else {
+                    buffer.clear();
+                }
+                writeMode = true;
             }
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, "Could not read from the server. Probably server's or client's socket has been closed.");

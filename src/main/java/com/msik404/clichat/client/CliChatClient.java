@@ -25,7 +25,6 @@ public class CliChatClient {
     public void run() throws IOException {
 
         var buffer = ByteBuffer.allocate(Header.size() + MessageBufferHandler.MAX_BUFFER_SIZE);
-        int bufferedAmount = 0;
         var header = new Header();
 
         try (var serverChannel = SocketChannel.open()) {
@@ -42,24 +41,21 @@ public class CliChatClient {
 
             var scanner = new Scanner(System.in);
             boolean userWantsToInput = true;
-            while (userWantsToInput || bufferedAmount != 0) {
-                if (userWantsToInput) {
-                    var message = scanner.nextLine();
-                    bufferedAmount += MessageBufferHandler.putMessage(buffer, header, message);
-                    buffer.flip();
-                    if (message.equals("STOP")) {
-                        LOGGER.log(Level.INFO, "Client disconnects. But there still might be data to send. Don't close the program.");
-                        userWantsToInput = false;
+            while (userWantsToInput) {
+                var message = scanner.nextLine();
+                MessageBufferHandler.putMessage(buffer, header, message);
+                buffer.flip();
+                if (message.equals("STOP")) {
+                    LOGGER.log(Level.INFO, "Client disconnects. But there still might be data to send. Don't close the program.");
+                    userWantsToInput = false;
+                }
+                while (buffer.hasRemaining()) {
+                    if (serverChannel.write(buffer) == -1) {
+                        LOGGER.log(Level.WARNING, "Connection with the server has been lost.");
+                        return;
                     }
                 }
-                bufferedAmount -= serverChannel.write(buffer);
-                if (userWantsToInput) {
-                    if (bufferedAmount != 0) {
-                        buffer.compact();
-                    } else {
-                        buffer.clear();
-                    }
-                }
+                buffer.clear();
             }
             listener.interrupt();
             LOGGER.log(Level.INFO, "All data sent. You can close the program now.");
