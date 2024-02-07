@@ -4,8 +4,6 @@ import com.msik404.clichat.message.Header;
 import com.msik404.clichat.message.MessageBuffer;
 
 import java.io.IOException;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.util.Optional;
 import java.util.logging.Level;
@@ -22,16 +20,12 @@ public record ClientInputHandler(SocketChannel serverChannel) implements Runnabl
         Header header = null;
 
         try {
-            var selector = Selector.open();
-            serverChannel.register(selector, SelectionKey.OP_READ);
-
             while (true) {
+                buffer.readFromChannel(serverChannel);
                 if (Thread.interrupted()) {
                     LOGGER.log(Level.INFO, "Stopping listening due to client disconnecting.");
                     return;
                 }
-                selector.select();
-                buffer.readFromChannel(serverChannel);
                 if (header == null) {
                     Optional<Header> optional = buffer.readHeader();
                     if (optional.isPresent()) {
