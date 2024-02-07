@@ -1,15 +1,18 @@
 package com.msik404.clichat.server;
 
+import com.msik404.clichat.message.Header;
+import com.msik404.clichat.message.MessageBufferHandler;
+
 import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.net.Socket;
 import java.net.SocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 import java.util.concurrent.Semaphore;
 
-public record ClientOutputHandler(Socket socket, ObjectOutputStream output, Semaphore mutex) {
+public record ClientOutputHandler(SocketChannel socketChannel, ByteBuffer buffer, Semaphore mutex) {
 
-    public ClientOutputHandler(Socket socket) throws IOException {
-        this(socket, new ObjectOutputStream(socket.getOutputStream()), new Semaphore(1));
+    public ClientOutputHandler(SocketChannel socketChannel) {
+        this(socketChannel, ByteBuffer.allocate(Header.size() + MessageBufferHandler.MAX_BUFFER_SIZE), new Semaphore(1));
     }
 
     private static String formatMessage(SocketAddress clientName, String message) {
@@ -24,9 +27,16 @@ public record ClientOutputHandler(Socket socket, ObjectOutputStream output, Sema
         return builder.toString();
     }
 
-    public void sendMessage(SocketAddress clientName, String message) throws IOException, InterruptedException {
+    public void sendMessage(SocketAddress clientName, Header header, String message) throws IOException, InterruptedException {
+        String formattedMessage = formatMessage(clientName, message);
         mutex.acquire();
-        output.writeObject(formatMessage(clientName, message));
+        int bufferedAmount = MessageBufferHandler.putMessage(buffer, header, formattedMessage);
+        buffer.flip();
+        while (bufferedAmount != 0) {
+            bufferedAmount -= socketChannel.write(buffer);
+        }
+        buffer.clear();
         mutex.release();
+        header.reset();
     }
 }
