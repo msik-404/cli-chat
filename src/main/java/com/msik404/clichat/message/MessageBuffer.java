@@ -8,7 +8,7 @@ import java.util.Optional;
 
 public class MessageBuffer {
 
-    public static int MAX_BUFFER_CONTENT_SIZE = Header.size() + 1024;
+    public static int MAX_BUFFER_SIZE = Header.size() + 1024;
 
     private final ByteBuffer buffer;
     private int readAmount;
@@ -16,7 +16,7 @@ public class MessageBuffer {
 
     public MessageBuffer() {
 
-        this.buffer = ByteBuffer.allocate(MAX_BUFFER_CONTENT_SIZE);
+        this.buffer = ByteBuffer.allocate(MAX_BUFFER_SIZE);
         this.readAmount = 0;
         this.toWriteAmount = 0;
     }
@@ -34,7 +34,7 @@ public class MessageBuffer {
 
     public int writeToChannel(SocketChannel channel) throws IOException {
         toWriteAmount -= channel.write(buffer);
-        return  toWriteAmount;
+        return toWriteAmount;
     }
 
     public void flip() {
@@ -54,6 +54,7 @@ public class MessageBuffer {
     }
 
     public Optional<Header> readHeader() {
+
         if (readAmount >= Header.size()) {
             readAmount -= Header.size();
             return Optional.of(new Header(buffer.getInt()));
