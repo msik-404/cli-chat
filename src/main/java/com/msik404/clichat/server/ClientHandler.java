@@ -80,10 +80,10 @@ public class ClientHandler implements Runnable {
                         break;
                     }
                 }
-                if (bufferedAmount == 0) {
-                    buffer.clear();
-                } else {
+                if (buffer.hasRemaining()) {
                     buffer.compact();
+                } else {
+                    buffer.clear();
                 }
                 writeMode = true;
             } while (userWantsToInput);
