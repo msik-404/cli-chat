@@ -28,7 +28,6 @@ public class ClientHandler implements Runnable {
 
     @Override
     public void run() {
-        var header = new MessageHeader();
         boolean sending = true;
         try {
             while (sending) {
