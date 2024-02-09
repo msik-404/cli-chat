@@ -1,7 +1,6 @@
 package com.msik404.clichat.server;
 
 import com.msik404.clichat.message.ConnectionLostException;
-import com.msik404.clichat.message.MessageHeader;
 import com.msik404.clichat.message.MessageReader;
 
 import java.io.IOException;
