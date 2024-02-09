@@ -1,6 +1,7 @@
 package com.msik404.clichat;
 
 import com.msik404.clichat.client.CliChatClient;
+import com.msik404.clichat.message.ConnectionLostException;
 import com.msik404.clichat.server.CliChatServer;
 
 import java.io.IOException;
@@ -24,6 +25,8 @@ public class CliChat {
                 client.run();
             } catch (IOException ex) {
                 LOGGER.log(Level.SEVERE, "Client closed due to error: " + ex.getMessage());
+            } catch (ConnectionLostException ex) {
+                LOGGER.log(Level.SEVERE, ex.getMessage());
             }
         } else if (args[0].equals("server")) {
             int port = Integer.parseInt(args[1]);

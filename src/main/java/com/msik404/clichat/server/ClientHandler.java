@@ -1,11 +1,10 @@
 package com.msik404.clichat.server;
 
-import com.msik404.clichat.message.Header;
-import com.msik404.clichat.message.MessageBufferHandler;
+import com.msik404.clichat.message.MessageHeader;
+import com.msik404.clichat.message.MessageReader;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Level;
@@ -17,77 +16,50 @@ public class ClientHandler implements Runnable {
 
     private final SocketChannel socketChannel;
     private final ConcurrentMap<SocketAddress, ClientOutputHandler> outputs;
+    private final MessageReader reader;
 
     public ClientHandler(SocketChannel socketChannel, ConcurrentMap<SocketAddress, ClientOutputHandler> outputs) {
 
         this.socketChannel = socketChannel;
         this.outputs = outputs;
+        this.reader = new MessageReader(socketChannel);
     }
 
     @Override
     public void run() {
-
-        var buffer = ByteBuffer.allocate(Header.size() + MessageBufferHandler.MAX_BUFFER_SIZE);
-        int bufferedAmount = 0;
-        boolean writeMode = true;
-
-        var header = new Header();
-
-        boolean userWantsToInput = true;
-        boolean stopSending = false;
-
+        var header = new MessageHeader();
+        boolean sending = true;
         try {
-            do {
-                int count = socketChannel.read(buffer);
-                if (count == -1) {
-                    LOGGER.log(Level.WARNING, "Connection with the server has been lost.");
-                    return;
-                }
-                bufferedAmount += count;
-                if (header.isEmpty() && bufferedAmount >= Header.size()) {
-                    buffer.flip();
-                    writeMode = false;
-                    bufferedAmount -= header.getFrom(buffer);
-                }
-                if (!header.isEmpty() && bufferedAmount >= header.getMessageLength()) {
-                    if (writeMode) {
-                        buffer.flip();
-                    }
-                    String message = MessageBufferHandler.getMessage(buffer, header);
-                    bufferedAmount -= header.getMessageLength();
-                    header.clear();
-
-                    if (message.equals("STOP")) {
-                        userWantsToInput = false;
-                    }
-
-                    for (ClientOutputHandler clientOutputHandler : outputs.values()) {
-                        var otherChannel = clientOutputHandler.socketChannel();
-                        if (!socketChannel.equals(otherChannel)) {
+            while (sending) {
+                reader.readFromChannel();
+                for (ClientOutputHandler clientOutputHandler : outputs.values()) {
+                    var otherChannel = clientOutputHandler.socketChannel();
+                    if (!socketChannel.equals(otherChannel)) {
+                        for (String message : reader.getMessageBuffer()) {
+                            if (message.equals("STOP")) {
+                                sending = false;
+                            }
                             try {
-                                clientOutputHandler.sendMessage(socketChannel.getRemoteAddress(), header, message);
+                                clientOutputHandler.sendMessage(socketChannel.getRemoteAddress(), message);
                             } catch (IOException ex) {
                                 outputs.remove(otherChannel.getRemoteAddress());
-                                LOGGER.log(Level.WARNING, "Write to client has failed. Probably client's socket has been closed.");
-                            } catch (InterruptedException e) {
-                                LOGGER.log(Level.SEVERE, "Current task has been interrupted from outside while waiting for mutex to send message to client.");
-                                stopSending = true;
+                                LOGGER.log(
+                                        Level.WARNING,
+                                        "Write to client has failed. Probably client's socket has been closed."
+                                );
+                            } catch (InterruptedException ex) {
+                                LOGGER.log(
+                                        Level.SEVERE,
+                                        "Current task has been interrupted from outside while waiting for " +
+                                                "mutex to send message to client."
+                                );
+                                sending = false;
                                 break;
                             }
                         }
                     }
-                    if (stopSending) {
-                        break;
-                    }
                 }
-                if (buffer.hasRemaining()) {
-                    buffer.compact();
-                } else {
-                    buffer.clear();
-                }
-                writeMode = true;
-            } while (userWantsToInput);
-
+            }
         } catch (IOException ex) {
             LOGGER.log(Level.WARNING, "Read from client has failed. Probably client has left unexpectedly.");
         } finally {

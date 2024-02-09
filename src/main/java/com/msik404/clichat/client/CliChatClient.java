@@ -1,11 +1,10 @@
 package com.msik404.clichat.client;
 
-import com.msik404.clichat.message.Header;
-import com.msik404.clichat.message.MessageBufferHandler;
+import com.msik404.clichat.message.ConnectionLostException;
+import com.msik404.clichat.message.MessageWriter;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.Scanner;
 import java.util.logging.Level;
@@ -22,10 +21,7 @@ public class CliChatClient {
         this.serverAddress = socketAddress;
     }
 
-    public void run() throws IOException {
-
-        var buffer = ByteBuffer.allocate(Header.size() + MessageBufferHandler.MAX_BUFFER_SIZE);
-        var header = new Header();
+    public void run() throws IOException, ConnectionLostException {
 
         try (var serverChannel = SocketChannel.open()) {
             serverChannel.configureBlocking(true);
@@ -40,24 +36,25 @@ public class CliChatClient {
             listener.start();
 
             var scanner = new Scanner(System.in);
+            var writer = new MessageWriter(serverChannel);
             boolean userWantsToInput = true;
             while (userWantsToInput) {
                 var message = scanner.nextLine();
-                MessageBufferHandler.putMessage(buffer, header, message);
-                buffer.flip();
+                writer.addMessage(message);
                 if (message.equals("STOP")) {
-                    LOGGER.log(Level.INFO, "Client disconnects. But there still might be data to send. Don't close the program.");
+                    LOGGER.log(
+                            Level.INFO,
+                            "Client disconnects. But there still might be data to send. Don't close the program."
+                    );
                     userWantsToInput = false;
                 }
-                while (buffer.hasRemaining()) {
-                    if (serverChannel.write(buffer) == -1) {
-                        LOGGER.log(Level.WARNING, "Connection with the server has been lost.");
-                        return;
-                    }
+                try {
+                    writer.writeAllToChannel();
+                } catch (ConnectionLostException ex) {
+                    listener.interrupt();
+                    throw ex;
                 }
-                buffer.clear();
             }
-            listener.interrupt();
             LOGGER.log(Level.INFO, "All data sent. You can close the program now.");
         }
     }
