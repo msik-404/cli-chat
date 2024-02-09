@@ -1,5 +1,6 @@
 package com.msik404.clichat.server;
 
+import com.msik404.clichat.message.ConnectionLostException;
 import com.msik404.clichat.message.MessageWriter;
 
 import java.io.IOException;
@@ -14,6 +15,7 @@ public record ClientOutputHandler(SocketChannel socketChannel, MessageWriter wri
     }
 
     private static String formatMessage(SocketAddress clientName, String message) {
+
         var builder = new StringBuilder();
         builder.append(clientName.toString());
         if (message.equals("STOP")) {
@@ -25,7 +27,11 @@ public record ClientOutputHandler(SocketChannel socketChannel, MessageWriter wri
         return builder.toString();
     }
 
-    public void sendMessage(SocketAddress clientName, String message) throws IOException, InterruptedException {
+    public void sendMessage(
+            SocketAddress clientName,
+            String message
+    ) throws IOException, InterruptedException, ConnectionLostException {
+
         String formattedMessage = formatMessage(clientName, message);
         mutex.acquire();
         writer.addMessage(formattedMessage);

@@ -1,5 +1,6 @@
 package com.msik404.clichat.server;
 
+import com.msik404.clichat.message.ConnectionLostException;
 import com.msik404.clichat.message.MessageHeader;
 import com.msik404.clichat.message.MessageReader;
 
@@ -41,20 +42,12 @@ public class ClientHandler implements Runnable {
                             }
                             try {
                                 clientOutputHandler.sendMessage(socketChannel.getRemoteAddress(), message);
-                            } catch (IOException ex) {
+                            } catch (IOException | ConnectionLostException ex) {
                                 outputs.remove(otherChannel.getRemoteAddress());
                                 LOGGER.log(
                                         Level.WARNING,
                                         "Write to client has failed. Probably client's socket has been closed."
                                 );
-                            } catch (InterruptedException ex) {
-                                LOGGER.log(
-                                        Level.SEVERE,
-                                        "Current task has been interrupted from outside while waiting for " +
-                                                "mutex to send message to client."
-                                );
-                                sending = false;
-                                break;
                             }
                         }
                     }
@@ -62,6 +55,12 @@ public class ClientHandler implements Runnable {
             }
         } catch (IOException ex) {
             LOGGER.log(Level.WARNING, "Read from client has failed. Probably client has left unexpectedly.");
+        } catch (InterruptedException ex) {
+            LOGGER.log(
+                    Level.SEVERE,
+                    "Current task has been interrupted from outside while waiting for mutex to " +
+                            "send message to client."
+            );
         } finally {
             try {
                 // When client wishes to exit or some error happened, remove client from message receivers.
