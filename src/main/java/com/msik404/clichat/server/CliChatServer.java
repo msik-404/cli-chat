@@ -15,7 +15,6 @@ public class CliChatServer implements AutoCloseable {
 
     private static final Logger LOGGER = Logger.getLogger(CliChatServer.class.getName());
 
-    private final ExecutorService pool;
     private final ServerSocketChannel server;
     private final InetSocketAddress serverAddress;
 
@@ -27,7 +26,6 @@ public class CliChatServer implements AutoCloseable {
         server.configureBlocking(true);
         this.serverAddress = new InetSocketAddress(port);
 
-        this.pool = Executors.newCachedThreadPool();
         this.outputs = new ConcurrentHashMap<>();
     }
 
@@ -43,7 +41,7 @@ public class CliChatServer implements AutoCloseable {
 
             outputs.put(socketChannel.getRemoteAddress(), new ClientOutputHandler(socketChannel));
 
-            pool.submit(new ClientHandler(socketChannel, outputs));
+            Thread.startVirtualThread(new ClientHandler(socketChannel, outputs));
         }
     }
 
